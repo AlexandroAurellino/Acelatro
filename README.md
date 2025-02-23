@@ -1,4 +1,4 @@
-```markdown
+
 # Acelatro Poker Assistant
 
 A command-line tool to help you play Balatro-style poker strategically, using knowledge-based system (KBS) and rule-based reasoning to recommend optimal plays.
