@@ -9,7 +9,7 @@ class Card:
         8: '8', 9: '9', 10: '10', 11: 'Jack', 
         12: 'Queen', 13: 'King', 14: 'Ace'
     }
-    suit_map = {'s': 'Spades', 'h': 'Hearts', 'd': 'Diamonds', 'c': 'Clubs'}
+    suit_map = {'s': 'Spades', 'h': 'Hearts', 'd': 'Diamonds', 'c': 'Clubs' }
     value_map = {'2':2, '3':3, '4':4, '5':5, '6':6, '7':7, '8':8, '9':9, '10':10,
                  'J':11, 'Q':12, 'K':13, 'A':14}
 
@@ -51,8 +51,7 @@ def is_royal_flush(cards):
     if len(cards) !=5:
         return False
     values = sorted([c.value for c in cards])
-    return (values == [10, 11, 12, 13, 14] and
-            is_flush(cards) and is_straight(cards))
+    return values == [10, 11, 12, 13, 14] and is_flush(cards) and is_straight(cards)
 
 def is_straight_flush(cards):
     return is_flush(cards) and is_straight(cards)
@@ -68,19 +67,19 @@ def is_four_of_a_kind(cards):
     counts = {}
     for c in cards:
         counts[c.value] = counts.get(c.value, 0) +1
-    return any(v >=4 for v in counts.values())
+    return any(v ==4 for v in counts.values())
 
 def is_full_house(cards):
     counts = {}
     for c in cards:
         counts[c.value] = counts.get(c.value, 0) +1
-    return (2 in counts.values()) and (3 in counts.values())
+    return sorted(counts.values()) == [2, 3]
 
 def is_three_of_a_kind(cards):
     counts = {}
     for c in cards:
         counts[c.value] = counts.get(c.value, 0) +1
-    return any(v >=3 for v in counts.values())
+    return any(v ==3 for v in counts.values())
 
 def is_two_pair(cards):
     counts = {}
@@ -156,7 +155,7 @@ class BalatroPoker:
             'played_cards': [],
             'discarded': [],
             'discard_count': 0,
-            'required_points': 1000,
+            'required_points': 300,
             'current_points': 0,
             'round_number': 1,
             'deck': []
@@ -168,7 +167,7 @@ class BalatroPoker:
             'played_cards': [],
             'discarded': [],
             'discard_count': 0,
-            'required_points': 1000,
+            'required_points': 300,
             'current_points': 0,
             'round_number': self.game_state.get('round_number', 1) + 1,
             'deck': self.initialize_deck()
@@ -194,17 +193,19 @@ class BalatroPoker:
     def play_combo(self, combo_cards):
         removed = []
         hand = self.game_state['hand']
-        combo_cards = [c for c in hand if c in combo_cards]
-        for card in combo_cards:
+        # Filter combo_cards that are present in the hand
+        valid_combo = [c for c in combo_cards if c in hand]
+        for card in valid_combo:
             hand.remove(card)
             removed.append(card)
         if not removed:
-            print("No cards selected to play!")
+            print("No valid cards selected to play!")
             return
         self.game_state['played_cards'].extend(removed)
         needed = 8 - len(hand)
         for _ in range(needed):
             self.deal_card()
+        # Identify the played combo
         combo_info = self.identify_combo(removed)
         if combo_info:
             base = combo_info['score']['base']
@@ -214,34 +215,33 @@ class BalatroPoker:
             self.game_state['current_points'] += score
             print(f"Played {combo_info['name']} and earned {score} points!")
         else:
-            print("No combo recognized! No points awarded.")
+            print("No valid combo recognized! No points awarded.")
 
     def identify_combo(self, combo_cards):
         for combo_def in self.COMBO_DEFINITIONS:
             required_count = combo_def['card_count']
-            check_func = combo_def['check']
-            base = combo_def['score']['base']
-            mult = combo_def['score']['mult']
             if len(combo_cards) < required_count:
                 continue
-            # Check if any combination of required_count cards meets the condition
-            # For simplicity, assume the entire combo_cards is checked
+            check_func = combo_def['check']
+            # Apply the check function to the first required_count cards
             if check_func(combo_cards[:required_count]):
                 return {
                     'name': combo_def['name'],
-                    'score': {'base': base, 'mult': mult}
+                    'score': combo_def['score']
                 }
         return {'name': 'High Card', 'score': {'base':5, 'mult':1}}
 
     def discard_cards(self, indices):
         hand = self.game_state['hand']
         discarded = []
-        valid_indices = []
+        indices = list(indices)
+        # Adjust indices to 0-based and remove duplicates
+        indices = list({idx - 1 for idx in indices})
+        # Sort descending to avoid index shifting issues
+        indices.sort(reverse=True)
         for idx in indices:
             if 0 <= idx < len(hand):
-                valid_indices.append(idx)
-        for idx in valid_indices:
-            discarded.append(hand.pop(idx))
+                discarded.append(hand.pop(idx))
         self.game_state['discarded'].extend(discarded)
         needed = 8 - len(hand)
         for _ in range(needed):
@@ -265,37 +265,66 @@ class BalatroPoker:
 
     def analyze_hand(self):
         hand = self.game_state['hand']
-        combos = []
+        if not hand:
+            print("No cards in hand to analyze.")
+            return
+
+        all_combos = []
+        # Evaluate each combo definition with its required card count
         for combo_def in self.COMBO_DEFINITIONS:
             required_count = combo_def['card_count']
-            check_func = combo_def['check']
-            base = combo_def['score']['base']
-            mult = combo_def['score']['mult']
-            for combo_cards in combinations(hand, required_count):
-                if check_func(combo_cards):
-                    chip_sum = sum(c.chip_value for c in combo_cards)
-                    total_score = (base + chip_sum) * mult
-                    combos.append({
+            if required_count > len(hand):
+                continue
+            # Generate all combinations of required_count cards
+            for combo in combinations(hand, required_count):
+                # Check if this combination meets the combo_def's criteria
+                if combo_def['check'](combo):
+                    base = combo_def['score']['base']
+                    mult = combo_def['score']['mult']
+                    chip_sum = sum(c.chip_value for c in combo)
+                    score = (base + chip_sum) * mult
+                    all_combos.append({
                         'name': combo_def['name'],
-                        'cards': combo_cards,
-                        'score': total_score
+                        'cards': combo,
+                        'score': score
                     })
+
         # Add High Card combo
+        high_card_combo = None
         if hand:
             max_card = max(hand, key=lambda c: c.value)
             chip_sum = max_card.chip_value
-            total_score = (5 + chip_sum) * 1
-            combos.append({
+            score = (5 + chip_sum) * 1
+            high_card_combo = {
                 'name': 'High Card',
-                'cards': [max_card],
-                'score': total_score
-            })
-        if combos:
-            best_combo = max(combos, key=lambda x: x['score'])
-            print(f"Recommended combo: {best_combo['name']}")
-            print("Recommended cards to play:")
-            for idx, card in enumerate(best_combo['cards']):
-                print(f"{idx+1}: {card}")
+                'cards': (max_card,),
+                'score': score
+            }
+            all_combos.append(high_card_combo)
+
+        # Remove duplicate combinations and sort by score
+        unique_combos = []
+        seen = set()
+        for combo in all_combos:
+            # Use a frozenset of card object IDs to track duplicates
+            cards_tuple = tuple(sorted(combo['cards'], key=lambda x: x.value))
+            combo_key = (combo['name'], cards_tuple)
+            if combo_key not in seen:
+                seen.add(combo_key)
+                unique_combos.append(combo)
+
+        # Sort by score descending, then by name ascending
+        unique_combos.sort(key=lambda x: (-x['score'], x['name']))
+
+        # Display the results
+        print("\nPossible Combos:")
+        for i, combo in enumerate(unique_combos):
+            print(f"{i+1}. {combo['name']}: Score {combo['score']}, Cards: {', '.join(str(c) for c in combo['cards'])}")
+
+        if unique_combos:
+            best_combo = unique_combos[0]
+            print(f"\nRecommended combo: {best_combo['name']} (Highest Score: {best_combo['score']})")
+            print("Recommended cards to play:", ', '.join(str(c) for c in best_combo['cards']))
             # Find indices in hand
             indices = []
             for card in best_combo['cards']:
@@ -304,9 +333,9 @@ class BalatroPoker:
                     indices.append(idx + 1)  # 1-based index
                 except ValueError:
                     pass
-            print("Suggested indices:", ", ".join(map(str, indices)))
+            print("Suggested indices:", ", ".join(map(str, indices)) if indices else "None")
         else:
-            print("No valid combos found.")
+            print("\nNo valid combos found.")
 
     def show_combo_scores(self):
         print("\nCombo Scores:")
@@ -341,13 +370,23 @@ class BalatroPoker:
             elif choice == '2':
                 self.check_hand()
                 selected = input("Enter indices of cards to play (e.g., '1 3 5'): ")
-                indices = [int(i)-1 for i in selected.split()]
-                combo_cards = [self.game_state['hand'][i] for i in indices if 0 <= i < len(self.game_state['hand'])]
+                indices = []
+                for i in selected.split():
+                    if i.isdigit():
+                        idx = int(i) - 1
+                        if 0 <= idx < len(self.game_state['hand']):
+                            indices.append(idx)
+                combo_cards = [self.game_state['hand'][i] for i in indices]
                 self.play_combo(combo_cards)
             elif choice == '3':
                 self.check_hand()
                 selected = input("Enter indices of cards to discard (e.g., '1 3 5'): ")
-                indices = [int(i)-1 for i in selected.split()]
+                indices = []
+                for i in selected.split():
+                    if i.isdigit():
+                        idx = int(i) - 1
+                        if 0 <= idx < len(self.game_state['hand']):
+                            indices.append(idx)
                 self.discard_cards(indices)
             elif choice == '4':
                 self.check_discarded()
