@@ -422,6 +422,8 @@ class BalatroPoker:
                     card_indices.append(idx)
                 except ValueError:
                     pass
+
+           
                     
             combo_container = ft.Container(
                 content=ft.Column([
@@ -438,6 +440,7 @@ class BalatroPoker:
                 border_radius=5,
                 margin=5
             )
+            
             combo_list.append(combo_container)
             
         return combo_list

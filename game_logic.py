@@ -118,6 +118,10 @@ class BalatroPoker:
             self.show_notification("No cards selected to play!")
             return
         
+        if len(self.selected_indices) > 5:
+             self.show_notification("You can only play up to 5 cards at a time!")
+             return
+        
         hand = self.game_state['hand']
         selected_cards = [hand[i] for i in self.selected_indices]
         
@@ -239,6 +243,9 @@ class BalatroPoker:
         return unique_combos
 
     def toggle_card_selection(self, index):
+        if index not in self.selected_indices and len(self.selected_indices) >= 5:
+            self.show_notification("You can only select up to 5 cards!")
+            return
         if index in self.selected_indices:
             self.selected_indices.remove(index)
         else:
@@ -301,12 +308,32 @@ class BalatroPoker:
                     card_indices.append(idx)
                 except ValueError:
                     pass
-                    
+                        
+            # Create a row for the cards in the combo
+            card_row = ft.Row(
+                controls=[
+                    ft.Container(
+                        content=ft.Text(
+                            card.short_name,
+                            size=16,
+                            weight="bold",
+                            color=card.color
+                        ),
+                        padding=5,
+                        margin=2,
+                        bgcolor="#e0e0e0",
+                        border_radius=5
+                    ) for card in combo['cards']
+                ],
+                wrap=True
+            )
+            
+            
             combo_container = ft.Container(
                 content=ft.Column([
                     ft.Text(f"{combo['name']}", weight="bold"),
                     ft.Text(f"Score: {combo['score']}"),
-                    ft.Text(f"Cards: {', '.join(c.short_name for c in combo['cards'])}"),
+                    card_row,  # Use the row for cards here
                     ft.ElevatedButton(
                         text="Select Cards",
                         on_click=lambda e, indices=card_indices: self.select_combo_cards(indices)
@@ -315,10 +342,12 @@ class BalatroPoker:
                 bgcolor="#e8e8e8",
                 padding=10,
                 border_radius=5,
-                margin=5
+                margin=5,
             )
+            
             combo_list.append(combo_container)
             
+    
         return combo_list
     
     def select_combo_cards(self, indices):
